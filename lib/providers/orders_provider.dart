@@ -90,10 +90,22 @@ class OrdersNotifier extends StateNotifier<AsyncValue<List<Order>>> {
 
   /// Create a new order.
   Future<void> createOrder(Map<String, dynamic> data) async {
-    final user = _supabase.auth.currentUser;
+    // 用 auth_id 查到 team_members.id 作为 created_by（FK 指向 team_members.id）
+    String? memberId;
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        final res = await _supabase
+            .from('team_members')
+            .select('id')
+            .eq('auth_id', user.id)
+            .maybeSingle();
+        if (res != null) memberId = res['id'] as String?;
+      }
+    } catch (_) {}
     final payload = {
       ...data,
-      'created_by': user?.id,
+      if (memberId != null) 'created_by': memberId,
     };
     await _supabase.from('orders').insert(payload);
     await loadOrders(refresh: true);
@@ -112,20 +124,36 @@ class OrdersNotifier extends StateNotifier<AsyncValue<List<Order>>> {
     required String toStatus,
     String? note,
   }) async {
-    final user = _supabase.auth.currentUser;
+    // 查到 team_members.id 作为 changed_by
+    String? memberId;
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        final res = await _supabase
+            .from('team_members')
+            .select('id')
+            .eq('auth_id', user.id)
+            .maybeSingle();
+        if (res != null) memberId = res['id'] as String?;
+      }
+    } catch (_) {}
     // Update order status.
     await _supabase
         .from('orders')
         .update({'status': toStatus, 'updated_at': DateTime.now().toIso8601String()})
         .eq('id', orderId);
     // Write status log.
-    await _supabase.from('order_status_logs').insert({
-      'order_id': orderId,
-      'from_status': fromStatus,
-      'to_status': toStatus,
-      'changed_by': user?.id,
-      'note': note,
-    });
+    try {
+      await _supabase.from('order_status_logs').insert({
+        'order_id': orderId,
+        'from_status': fromStatus,
+        'to_status': toStatus,
+        if (memberId != null) 'changed_by': memberId,
+        if (note != null) 'note': note,
+      });
+    } catch (_) {}
+    await loadOrders(refresh: true);
+  }
     await loadOrders(refresh: true);
   }
 
