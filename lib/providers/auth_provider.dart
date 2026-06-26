@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -45,13 +46,12 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   /// Check if the currently logged-in user is a team member.
   Future<bool> isTeamMember(String userId) async {
     try {
-      final res = await _supabase
-          .from('team_members')
-          .select('id')
-          .eq('auth_id', userId)
-          .maybeSingle();
-      return res != null;
-    } catch (_) {
+      // 直接查所有成员，避免 SDK filter 兼容问题
+      final res = await _supabase.from('team_members').select('auth_id');
+      final list = res as List;
+      return list.any((e) => e['auth_id'] == userId);
+    } catch (e) {
+      debugPrint('isTeamMember error: $e');
       return false;
     }
   }
@@ -74,12 +74,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     try {
       final uid = _supabase.auth.currentUser?.id;
       if (uid == null) return null;
-      final res = await _supabase
-          .from('team_members')
-          .select()
-          .eq('auth_id', uid)
-          .maybeSingle();
-      return res != null ? TeamMember.fromJson(res) : null;
+      final all = await getAllMembers();
+      for (final m in all) {
+        if (m.authId == uid) return m;
+      }
+      return null;
     } catch (_) {
       return null;
     }
