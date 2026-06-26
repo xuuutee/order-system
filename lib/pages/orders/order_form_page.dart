@@ -213,10 +213,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                     prefixIcon: Icon(Icons.calendar_today),
                   ),
                   child: Text(
-                    _deadline != null
-                        ? '${_deadline!.year}-${_deadline!.month.toString().padLeft(2, '0')}-${_deadline!.day.toString().padLeft(2, '0')}'
-                        : '选择日期',
-                    style: TextStyle(color: _deadline != null ? null : Colors.grey),
+                    '${_deadline.year}-${_deadline.month.toString().padLeft(2, '0')}-${_deadline.day.toString().padLeft(2, '0')}',
                   ),
                 ),
               ),
@@ -270,47 +267,40 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                   ),
                 ]);
               }),
+              const SizedBox(height: 12),
+
+              // ═══ 客户 + 标题（必填，始终可见）═══
+              TextFormField(
+                controller: _customerCtrl,
+                decoration: const InputDecoration(labelText: '客户名称 *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person_outline)),
+                validator: (v) => (v == null || v.trim().isEmpty) ? '请输入客户名称' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _titleCtrl,
+                decoration: const InputDecoration(labelText: '订单标题 *', border: OutlineInputBorder(), prefixIcon: Icon(Icons.title)),
+                validator: (v) => (v == null || v.trim().isEmpty) ? '请输入订单标题' : null,
+              ),
               const SizedBox(height: 16),
 
               // ═══ More toggle ═══
               InkWell(
                 onTap: () => setState(() => _showMore = !_showMore),
-                child: Row(
-                  children: [
-                    Icon(
-                      _showMore ? Icons.expand_less : Icons.expand_more,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '更多信息',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
+                child: Row(children: [
+                  Icon(_showMore ? Icons.expand_less : Icons.expand_more, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 4),
+                  Text('更多信息', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.primary)),
+                ]),
               ),
               const SizedBox(height: 12),
 
               // ═══ Collapsed fields ═══
               if (_showMore) ...[
                 TextFormField(
-                  controller: _customerCtrl,
-                  decoration: const InputDecoration(labelText: '客户名称', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
                   controller: _contactCtrl,
                   decoration: const InputDecoration(labelText: '联系方式', border: OutlineInputBorder()),
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _titleCtrl,
-                  decoration: const InputDecoration(labelText: '标题', border: OutlineInputBorder()),
-                ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _descCtrl,
