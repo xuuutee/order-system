@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:order_system/models/team_member.dart';
 import 'package:order_system/providers/auth_provider.dart';
@@ -15,6 +16,7 @@ class ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<ProfilePage> {
   String _appVersion = '';
   TeamMember? _member;
+  List<Map<String, dynamic>> _types = [];
   bool _loading = true;
 
   @override
@@ -27,10 +29,21 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final info = await PackageInfo.fromPlatform();
     final auth = ref.read(authProvider.notifier);
     final member = await auth.getCurrentMember();
+    // 加载订单类型
+    List<Map<String, dynamic>> types = [];
+    try {
+      final res = await Supabase.instance.client
+          .from('order_types')
+          .select()
+          .eq('is_active', true)
+          .order('created_at');
+      types = List<Map<String, dynamic>>.from(res as List);
+    } catch (_) {}
     if (mounted) {
       setState(() {
         _appVersion = 'v${info.version}+${info.buildNumber}';
         _member = member;
+        _types = types;
         _loading = false;
       });
     }
@@ -170,9 +183,45 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ),
           ),
           const SizedBox(height: 24),
-          Center(
-            child: Text('版本 $_appVersion',
-                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+
+          // ── 订单类型 ──
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('订单类型', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6, runSpacing: 6,
+                  children: _types.map((t) => Chip(
+                    avatar: Icon(_iconForType(t['icon'] as String?), size: 18),
+                    label: Text(t['name'] as String? ?? '', style: const TextStyle(fontSize: 13)),
+                  )).toList(),
+                ),
+                const SizedBox(height: 4),
+                Text('共 ${_types.length} 种类型', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 版本 ──
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('版本'),
+              subtitle: Text(_appVersion.isEmpty ? '...' : _appVersion),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 服务器 ──
+          Card(
+            child: const ListTile(
+              leading: Icon(Icons.cloud_outlined),
+              title: Text('服务器'),
+              subtitle: Text('123.207.255.76'),
+            ),
           ),
           const SizedBox(height: 24),
           SizedBox(
@@ -193,5 +242,16 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ],
       ),
     );
+  }
+
+  IconData _iconForType(String? icon) {
+    switch (icon) {
+      case 'school': return Icons.school;
+      case 'slideshow': return Icons.slideshow;
+      case 'edit_note': return Icons.edit_note;
+      case 'assignment': return Icons.assignment;
+      case 'description': return Icons.description;
+      default: return Icons.receipt_long;
+    }
   }
 }
