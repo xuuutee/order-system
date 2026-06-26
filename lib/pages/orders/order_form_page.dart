@@ -255,7 +255,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
               Builder(builder: (_) {
                 final total = double.tryParse(_priceCtrl.text) ?? 0;
                 final received = double.tryParse(_receivedCtrl.text) ?? 0;
-                final pending = total - received;
+                final pending = (total - received).clamp(0, double.infinity);
                 return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   Text(
                     '待收金额: ',
