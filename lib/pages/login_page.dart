@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:order_system/providers/auth_provider.dart';
+import 'package:order_system/services/jpush_service.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -38,6 +39,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final isMember = await auth.isTeamMember(user.id);
       if (!mounted) return;
       if (isMember) {
+        JPushService().syncToken();
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         await auth.signOut();
@@ -71,6 +73,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       }
 
       if (!mounted) return;
+      JPushService().syncToken();
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (!mounted) return;

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:order_system/models/team_member.dart';
+import 'package:order_system/services/jpush_service.dart';
 
 final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<User?>>((ref) {
   return AuthNotifier();
@@ -39,6 +40,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   }
 
   Future<void> signOut() async {
+    await JPushService().unregisterDevice();
     await _supabase.auth.signOut();
     state = const AsyncValue.data(null);
   }

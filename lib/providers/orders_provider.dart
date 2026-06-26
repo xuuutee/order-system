@@ -154,8 +154,6 @@ class OrdersNotifier extends StateNotifier<AsyncValue<List<Order>>> {
     } catch (_) {}
     await loadOrders(refresh: true);
   }
-    await loadOrders(refresh: true);
-  }
 
   /// Delete an order.
   Future<void> deleteOrder(String orderId) async {
