@@ -68,4 +68,35 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       return [];
     }
   }
+
+  /// 获取当前登录用户的信息
+  Future<TeamMember?> getCurrentMember() async {
+    try {
+      final uid = _supabase.auth.currentUser?.id;
+      if (uid == null) return null;
+      final res = await _supabase
+          .from('team_members')
+          .select()
+          .eq('auth_id', uid)
+          .maybeSingle();
+      return res != null ? TeamMember.fromJson(res) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 更新当前用户的名字和电话
+  Future<void> updateCurrentMember({
+    required String name,
+    String? phone,
+  }) async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) throw Exception('未登录');
+    final body = <String, dynamic>{'name': name};
+    if (phone != null) body['phone'] = phone;
+    await _supabase
+        .from('team_members')
+        .update(body)
+        .eq('auth_id', uid);
+  }
 }
