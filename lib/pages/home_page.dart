@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:order_system/pages/orders/order_list_page.dart';
 import 'package:order_system/pages/orders/order_form_page.dart';
 import 'package:order_system/pages/stats/stats_page.dart';
 import 'package:order_system/pages/settings/profile_page.dart';
+import 'package:order_system/services/version_service.dart';
+import 'package:order_system/services/notification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -21,6 +24,46 @@ class _HomePageState extends State<HomePage> {
     StatsPage(),
     ProfilePage(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUpdate();
+    NotificationService().startListening();
+  }
+
+  @override
+  void dispose() {
+    NotificationService().stopListening();
+    super.dispose();
+  }
+
+  Future<void> _checkUpdate() async {
+    final info = await VersionService.check();
+    if (!mounted) return;
+    if (info.hasUpdate && info.downloadUrl != null) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('发现新版本'),
+          content: Text('当前版本：${info.currentVersion}\n最新版本：${info.latestVersion}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('稍后更新'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                launchUrl(Uri.parse(info.downloadUrl!));
+              },
+              child: const Text('立即下载'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -223,56 +223,74 @@ class _OrderCard extends ConsumerWidget {
       match = types.firstWhere((t) => t.id == order.typeId);
     } catch (_) {}
     final typeName = match?.name ?? '';
+    final typeIcon = match?.icon ?? 'assignment';
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 1),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         onTap: () => Navigator.pushNamed(context, '/order-detail', arguments: order.id),
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Text(
-                    order.orderNo,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey),
-                  ),
-                  if (typeName.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    Text(typeName, style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
-                  ],
-                  const Spacer(),
-                  StatusBadge(status: order.status),
-                ],
+              // 左侧：类型图标
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: StatusBadge.colorForStatus(order.status).withAlpha(25),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  _iconForTypeName(typeIcon),
+                  size: 24,
+                  color: StatusBadge.colorForStatus(order.status),
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                order.title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.person_outline, size: 14, color: Colors.grey.shade600),
-                  const SizedBox(width: 4),
-                  Text(
-                    order.customerName,
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                  ),
-                  if (order.price != null) ...[
-                    const Spacer(),
+              const SizedBox(width: 12),
+              // 中间：类型名（大字）+ 客户 + 编号
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      fmt.format(order.price),
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.redAccent),
+                      typeName.isNotEmpty ? typeName : '订单',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.person_outline, size: 12, color: Colors.grey),
+                        const SizedBox(width: 2),
+                        Text(
+                          order.customerName,
+                          style: const TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                        const SizedBox(width: 10),
+                        if (order.price != null)
+                          _AmountText(price: order.price!, extra: order.extra),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      order.orderNo,
+                      style: const TextStyle(fontSize: 11, color: Colors.grey),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 右侧：状态 + 截止
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  StatusBadge(status: order.status),
                   if (order.deadline != null) ...[
-                    const SizedBox(width: 12),
+                    const SizedBox(height: 6),
                     DeadlineHighlight(deadline: order.deadline!),
                   ],
                 ],
@@ -282,5 +300,43 @@ class _OrderCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  static final _amountFmt = NumberFormat.currency(symbol: '', decimalDigits: 0);
+
+  IconData _iconForTypeName(String iconName) {
+    switch (iconName) {
+      case 'school': return Icons.school;
+      case 'slideshow': return Icons.slideshow;
+      case 'edit_note': return Icons.edit_note;
+      case 'assignment': return Icons.assignment;
+      case 'dashboard': return Icons.dashboard;
+      case 'description': return Icons.description;
+      case 'checklist': return Icons.checklist;
+      case 'stamp': return Icons.fingerprint;
+      default: return Icons.receipt_long;
+    }
+  }
+}
+
+class _AmountText extends StatelessWidget {
+  final double price;
+  final Map<String, dynamic> extra;
+  const _AmountText({required this.price, required this.extra});
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = NumberFormat.currency(symbol: '¥', decimalDigits: 0);
+    final received = (extra['received_amount'] as num?)?.toDouble() ?? 0;
+    final pending = price - received;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Text(fmt.format(price),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.redAccent)),
+      if (pending > 0) ...[
+        const SizedBox(width: 4),
+        Text('待收${fmt.format(pending)}',
+            style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.w500)),
+      ],
+    ]);
   }
 }

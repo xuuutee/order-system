@@ -1,7 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:order_system/models/order.dart';
 import 'package:order_system/models/order_type.dart';
@@ -31,26 +32,36 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
     _loadOrder();
   }
 
+  static const _url = 'http://123.207.255.76:8000';
+  static const _anonKey =
+      'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIn0.tiSYBtsxALGOt22WxGEVpvzHN3lW6Sgs7AopMpeAfA0';
+
   Future<void> _loadOrder() async {
     setState(() => _loading = true);
     try {
-      final supabase = Supabase.instance.client;
-      final res = await supabase
-          .from('orders')
-          .select()
-          .eq('id', widget.orderId)
-          .single();
-      _order = Order.fromJson(res);
+      // 查询订单
+      final orderRes = await http.get(
+        Uri.parse('$_url/rest/v1/orders?id=eq.${widget.orderId}&select=*'),
+        headers: {'apikey': _anonKey},
+      );
+      if (orderRes.statusCode == 200) {
+        final list = jsonDecode(orderRes.body) as List;
+        if (list.isNotEmpty) {
+          _order = Order.fromJson(list[0]);
 
-      final typeId = _order!.typeId;
-      if (typeId != null) {
-        final typeRes = await supabase
-            .from('order_types')
-            .select()
-            .eq('id', typeId)
-            .maybeSingle();
-        if (typeRes != null) {
-          _type = OrderType.fromJson(typeRes);
+          // 查询订单类型
+          if (_order!.typeId != null) {
+            final typeRes = await http.get(
+              Uri.parse('$_url/rest/v1/order_types?id=eq.${_order!.typeId}&select=*'),
+              headers: {'apikey': _anonKey},
+            );
+            if (typeRes.statusCode == 200) {
+              final typeList = jsonDecode(typeRes.body) as List;
+              if (typeList.isNotEmpty) {
+                _type = OrderType.fromJson(typeList[0]);
+              }
+            }
+          }
         }
       }
 
@@ -58,6 +69,36 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
       _members = await auth.getAllMembers();
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _deleteOrder() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认删除'),
+        content: Text('确定删除订单「${_order!.orderNo}」吗？此操作不可恢复。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('确认删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || _order == null) return;
+    try {
+      await ref.read(ordersProvider.notifier).deleteOrder(_order!.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('订单已删除')));
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('删除失败：$e')));
+      }
+    }
   }
 
   Future<void> _changeStatus(String newStatus) async {
@@ -125,6 +166,10 @@ class _OrderDetailPageState extends ConsumerState<OrderDetailPage> {
               await Navigator.pushNamed(context, '/order-form', arguments: order.id);
               _loadOrder();
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: _deleteOrder,
           ),
         ],
       ),

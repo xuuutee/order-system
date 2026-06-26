@@ -23,8 +23,10 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
   // Key fields (always visible)
   OrderType? _selectedType;
-  DateTime? _deadline;
+  DateTime _deadline = DateTime.now().add(const Duration(days: 2));
   final _priceCtrl = TextEditingController();
+  final _receivedCtrl = TextEditingController(); // 已收
+  final _actualCtrl = TextEditingController();   // 应收（实收）
 
   // More fields (collapsed)
   final _customerCtrl = TextEditingController();
@@ -47,6 +49,8 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
   @override
   void dispose() {
     _priceCtrl.dispose();
+    _receivedCtrl.dispose();
+    _actualCtrl.dispose();
     _customerCtrl.dispose();
     _contactCtrl.dispose();
     _titleCtrl.dispose();
@@ -72,16 +76,22 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     setState(() => _saving = true);
 
     try {
+      final extraData = {
+        ..._extra,
+        'received_amount': double.tryParse(_receivedCtrl.text) ?? 0,
+        'actual_amount': double.tryParse(_actualCtrl.text) ?? double.tryParse(_priceCtrl.text) ?? 0,
+        'pending_amount': (double.tryParse(_priceCtrl.text) ?? 0) - (double.tryParse(_receivedCtrl.text) ?? 0),
+      };
       final data = {
         'type_id': _selectedType!.id,
-        'deadline': _deadline?.toIso8601String(),
+        'deadline': _deadline.toIso8601String(),
         'price': double.tryParse(_priceCtrl.text),
         'customer_name': _customerCtrl.text.trim(),
         'customer_contact': _contactCtrl.text.trim(),
         'title': _titleCtrl.text.trim(),
         'description': _descCtrl.text.trim(),
         'primary_owner': _owner,
-        'extra': _extra,
+        'extra': extraData,
       };
 
       final notifier = ref.read(ordersProvider.notifier);
@@ -108,13 +118,15 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
 
   void _clearForm() {
     _priceCtrl.clear();
+    _receivedCtrl.clear();
+    _actualCtrl.clear();
     _customerCtrl.clear();
     _contactCtrl.clear();
     _titleCtrl.clear();
     _descCtrl.clear();
     setState(() {
       _selectedType = null;
-      _deadline = null;
+      _deadline = DateTime.now().add(const Duration(days: 2));
       _owner = null;
       _extra = {};
       _showMore = false;
@@ -188,7 +200,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                 onTap: () async {
                   final d = await showDatePicker(
                     context: context,
-                    initialDate: _deadline ?? DateTime.now().add(const Duration(days: 7)),
+                    initialDate: _deadline,
                     firstDate: DateTime.now().subtract(const Duration(days: 30)),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
                   );
@@ -201,10 +213,7 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                     prefixIcon: Icon(Icons.calendar_today),
                   ),
                   child: Text(
-                    _deadline != null
-                        ? '${_deadline!.year}-${_deadline!.month.toString().padLeft(2, '0')}-${_deadline!.day.toString().padLeft(2, '0')}'
-                        : '选择日期',
-                    style: TextStyle(color: _deadline != null ? null : Colors.grey),
+                    '${_deadline.year}-${_deadline.month.toString().padLeft(2, '0')}-${_deadline.day.toString().padLeft(2, '0')}',
                   ),
                 ),
               ),
@@ -215,12 +224,51 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                 controller: _priceCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  labelText: '金额',
+                  labelText: '总金额',
                   border: OutlineInputBorder(),
                   prefixText: '¥ ',
                   prefixIcon: Icon(Icons.monetization_on_outlined),
                 ),
               ),
+              const SizedBox(height: 10),
+              // 已收 + 应收 并行
+              Row(children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _receivedCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: '已收金额',
+                      border: OutlineInputBorder(),
+                      prefixText: '¥ ',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextFormField(
+                    controller: _actualCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: '应收账款',
+                      border: OutlineInputBorder(),
+                      prefixText: '¥ ',
+                      hintText: '默认=总金额',
+                    ),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 4),
+              // 待收 = 总金额 - 已收（自动计算）
+              Builder(builder: (ctx) {
+                final total = double.tryParse(_priceCtrl.text) ?? 0;
+                final received = double.tryParse(_receivedCtrl.text) ?? 0;
+                final pending = total - received;
+                return Text(
+                  '待收金额: ¥${pending.toStringAsFixed(0)}',
+                  style: TextStyle(fontSize: 13, color: pending > 0 ? Colors.red : Colors.green),
+                );
+              }),
               const SizedBox(height: 16),
 
               // ═══ More toggle ═══
