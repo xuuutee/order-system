@@ -70,7 +70,12 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       _userId = data['user']['id'] as String;
 
       // 同步 Supabase SDK auth session，Realtime 订阅需要 JWT
-      await _supabase.auth.setSession(_accessToken!);
+      try {
+        await _supabase.auth.setSession(_accessToken!);
+      } catch (_) {
+        // setSession 失败不阻断登录（自托管 Supabase 兼容性）
+        debugPrint('setSession failed, continuing without SDK auth sync');
+      }
 
       // 保存新的 refresh token（旧的已失效）
       await prefs.setString(_prefsKey, _refreshToken!);
@@ -113,7 +118,12 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       _userId = data['user']['id'] as String;
 
       // 同步 Supabase SDK auth session，Realtime 订阅需要 JWT
-      await _supabase.auth.setSession(_accessToken!);
+      try {
+        await _supabase.auth.setSession(_accessToken!);
+      } catch (_) {
+        // setSession 失败不阻断登录（自托管 Supabase 兼容性）
+        debugPrint('setSession failed, continuing without SDK auth sync');
+      }
 
       // 保存 refresh token 到本地
       final prefs = await SharedPreferences.getInstance();
