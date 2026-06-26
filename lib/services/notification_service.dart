@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
 
 class NotificationService {
   NotificationService._();
@@ -10,6 +11,7 @@ class NotificationService {
   factory NotificationService() => _instance;
 
   static const _url = 'http://123.207.255.76:8000';
+  static const _updateHost = 'http://123.207.255.76:9000';
   static const _anonKey =
       'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIn0.tiSYBtsxALGOt22WxGEVpvzHN3lW6Sgs7AopMpeAfA0';
 
@@ -19,8 +21,10 @@ class NotificationService {
   bool _initialized = false;
   bool _running = false;
 
-  /// 记录已通知过的最大 created_at，只推送真正的新订单
   String? _lastCreatedAt;
+  String _currentVersion = '';
+  /// 上次已通知过的服务器版本号，避免重复弹
+  String? _lastNotifiedVersion;
 
   bool get initialized => _initialized;
 
@@ -44,17 +48,24 @@ class NotificationService {
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
+    // 读取当前 App 版本
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _currentVersion = info.version;
+    } catch (_) {
+      _currentVersion = '0.0.0';
+    }
+
     _initialized = true;
-    debugPrint('NotificationService initialized');
+    debugPrint('NotificationService initialized, version=$_currentVersion');
   }
 
-  /// 开始轮询新订单（每 30 秒），替代 Realtime websocket
+  /// 开始轮询（每 30 秒）：新订单 + 新版本
   void startListening() {
     if (!_initialized) return;
     if (_running) return;
     _running = true;
 
-    // 先查一次最新订单时间作为基准，避免把现存老订单当新订单推
     _fetchLatestCreatedAt().then((_) {
       if (_running) {
         _timer = Timer.periodic(const Duration(seconds: 30), (_) => _poll());
@@ -70,7 +81,6 @@ class NotificationService {
     debugPrint('NotificationService polling stopped');
   }
 
-  /// 获取当前最新订单的 created_at 作为基准线
   Future<void> _fetchLatestCreatedAt() async {
     try {
       final response = await http.get(
@@ -89,8 +99,13 @@ class NotificationService {
     }
   }
 
-  /// 轮询：查询比 _lastCreatedAt 更新的订单
+  /// 轮询：新订单 + 新版本
   Future<void> _poll() async {
+    await Future.wait([_checkNewOrders(), _checkNewVersion()]);
+  }
+
+  /// 查询比 _lastCreatedAt 更新的订单
+  Future<void> _checkNewOrders() async {
     try {
       if (_lastCreatedAt == null) {
         await _fetchLatestCreatedAt();
@@ -111,20 +126,46 @@ class NotificationService {
           final customerName = row['customer_name'] as String? ?? '无客户名';
           final createdAt = row['created_at'] as String?;
 
-          _showNotification(orderNo, title, customerName);
+          _showOrderNotification(orderNo, title, customerName);
 
-          // 推进基准线
           if (createdAt != null) {
             _lastCreatedAt = createdAt;
           }
         }
       }
     } catch (e) {
-      debugPrint('NotificationService poll error: $e');
+      debugPrint('_checkNewOrders error: $e');
     }
   }
 
-  Future<void> _showNotification(
+  /// 检查服务器是否有新版本
+  Future<void> _checkNewVersion() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_updateHost/update/version.json'),
+        headers: {'apikey': _anonKey},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        var latest = data['version'] as String? ?? '';
+        // 去掉 v 前缀
+        if (latest.startsWith('v')) latest = latest.substring(1);
+
+        // 服务器版本 > 当前版本 且 未通知过
+        if (latest.isNotEmpty &&
+            latest != _currentVersion &&
+            latest != _lastNotifiedVersion) {
+          _lastNotifiedVersion = latest;
+          _showUpdateNotification(latest);
+        }
+      }
+    } catch (e) {
+      debugPrint('_checkNewVersion error: $e');
+    }
+  }
+
+  Future<void> _showOrderNotification(
       String orderNo, String title, String customerName) async {
     await _plugin.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000 + orderNo.hashCode,
@@ -135,6 +176,24 @@ class NotificationService {
           'new_orders',
           '新订单',
           channelDescription: '新订单创建通知',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
+  }
+
+  Future<void> _showUpdateNotification(String latestVersion) async {
+    await _plugin.show(
+      0, // 固定 ID，更新通知只保留一条
+      '发现新版本 v$latestVersion',
+      '点击下载更新',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'app_update',
+          '版本更新',
+          channelDescription: '应用版本更新通知',
           importance: Importance.high,
           priority: Priority.high,
         ),
