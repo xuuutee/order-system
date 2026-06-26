@@ -1,108 +1,142 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class DailyStat {
-  final DateTime date;
+enum StatsPeriod { day, month, year }
+
+class PeriodStat {
+  final String label;
   final int count;
   final double revenue;
-  const DailyStat({required this.date, required this.count, required this.revenue});
+  const PeriodStat({required this.label, required this.count, required this.revenue});
 }
-
-class TypeStat {
-  final String typeName;
-  final int count;
-  const TypeStat({required this.typeName, required this.count});
-}
-
-final statsProvider = FutureProvider<StatsData?>((ref) async {
-  return StatsService.fetch();
-});
 
 class StatsData {
-  final List<DailyStat> daily;
-  final List<TypeStat> byType;
+  final List<PeriodStat> period;
   final int totalOrders;
   final double totalRevenue;
-  final int todayOrders;
-  final double todayRevenue;
+  final int periodOrders;
+  final double periodRevenue;
+  final String periodLabel;
 
   const StatsData({
-    required this.daily,
-    required this.byType,
+    required this.period,
     required this.totalOrders,
     required this.totalRevenue,
-    required this.todayOrders,
-    required this.todayRevenue,
+    required this.periodOrders,
+    required this.periodRevenue,
+    required this.periodLabel,
   });
 }
+
+final statsPeriodProvider = StateProvider<StatsPeriod>((ref) => StatsPeriod.day);
+
+final statsProvider = FutureProvider<StatsData?>((ref) async {
+  final period = ref.watch(statsPeriodProvider);
+  return StatsService.fetch(period);
+});
 
 class StatsService {
   static final _supabase = Supabase.instance.client;
 
-  static Future<StatsData> fetch() async {
-    // 最近 7 天每日统计
-    final sevenDaysAgo = DateTime.now()
-        .subtract(const Duration(days: 6))
-        .toIso8601String()
-        .substring(0, 10);
+  static Future<StatsData> fetch(StatsPeriod period) async {
+    DateTime start;
+    int bins;
+    String Function(DateTime) labelFn;
+    String periodLabel;
+
+    final now = DateTime.now();
+    switch (period) {
+      case StatsPeriod.day:
+        start = now.subtract(const Duration(days: 6));
+        bins = 7;
+        labelFn = (d) => '${d.month}/${d.day}';
+        periodLabel = '近 7 天';
+        break;
+      case StatsPeriod.month:
+        start = DateTime(now.year, now.month, 1);
+        bins = now.day;
+        labelFn = (d) => '${d.month}/${d.day}';
+        periodLabel = '本月';
+        break;
+      case StatsPeriod.year:
+        start = DateTime(now.year, 1, 1);
+        bins = 12;
+        labelFn = (d) => '${d.month}月';
+        periodLabel = '本年';
+        break;
+    }
+
+    // 初始化所有区间
+    final Map<String, PeriodStat> map = {};
+    if (period == StatsPeriod.year) {
+      for (int m = 1; m <= 12; m++) {
+        final key = '$m';
+        map[key] = PeriodStat(label: '${m}月', count: 0, revenue: 0);
+      }
+    } else if (period == StatsPeriod.month) {
+      for (int d = 1; d <= now.day; d++) {
+        final date = DateTime(now.year, now.month, d);
+        final key = date.toIso8601String().substring(0, 10);
+        map[key] = PeriodStat(label: labelFn(date), count: 0, revenue: 0);
+      }
+    } else {
+      for (int i = bins - 1; i >= 0; i--) {
+        final date = now.subtract(Duration(days: i));
+        final key = date.toIso8601String().substring(0, 10);
+        map[key] = PeriodStat(label: labelFn(date), count: 0, revenue: 0);
+      }
+    }
 
     final orders = await _supabase
         .from('orders')
-        .select('created_at, price, type_id, order_types(name)')
-        .gte('created_at', sevenDaysAgo)
+        .select('created_at, price')
+        .gte('created_at', start.toIso8601String())
         .order('created_at');
 
     final list = orders as List;
-
-    // 按天分组
-    final dayMap = <String, DailyStat>{};
-    for (int i = 6; i >= 0; i--) {
-      final d = DateTime.now().subtract(Duration(days: i));
-      final key = d.toIso8601String().substring(0, 10);
-      dayMap[key] = DailyStat(date: d, count: 0, revenue: 0);
-    }
-
-    // 按类型分组
-    final typeMap = <String, int>{};
-    double totalRevenue = 0;
     int totalOrders = list.length;
-    int todayOrders = 0;
-    double todayRevenue = 0;
-    final today = DateTime.now().toIso8601String().substring(0, 10);
+    double totalRevenue = 0;
 
     for (final row in list) {
       final createdAt = row['created_at'] as String? ?? '';
-      final dayKey = createdAt.substring(0, 10);
       final price = (row['price'] as num?)?.toDouble() ?? 0;
-      final orderTypes = row['order_types'] as Map?;
-      final typeName = (orderTypes != null ? orderTypes['name'] as String? : null) ?? '未知';
-
-      if (dayMap.containsKey(dayKey)) {
-        dayMap[dayKey] = DailyStat(
-          date: dayMap[dayKey]!.date,
-          count: dayMap[dayKey]!.count + 1,
-          revenue: dayMap[dayKey]!.revenue + price,
-        );
-      }
-
-      typeMap[typeName] = (typeMap[typeName] ?? 0) + 1;
       totalRevenue += price;
 
-      if (dayKey == today) {
-        todayOrders++;
-        todayRevenue += price;
+      final dt = DateTime.tryParse(createdAt) ?? now;
+      String key;
+      if (period == StatsPeriod.year) {
+        key = '${dt.month}';
+      } else {
+        key = createdAt.substring(0, 10);
+      }
+
+      if (map.containsKey(key)) {
+        final old = map[key]!;
+        map[key] = PeriodStat(label: old.label, count: old.count + 1, revenue: old.revenue + price);
       }
     }
 
+    int periodOrders = 0;
+    double periodRevenue = 0;
+    final today = now.toIso8601String().substring(0, 10);
+    for (final entry in map.entries) {
+      if (period != StatsPeriod.year && entry.key == today) {
+        periodOrders = entry.value.count;
+        periodRevenue = entry.value.revenue;
+      }
+    }
+    if (period == StatsPeriod.year) {
+      periodOrders = totalOrders;
+      periodRevenue = totalRevenue;
+    }
+
     return StatsData(
-      daily: dayMap.values.toList(),
-      byType: typeMap.entries
-          .map((e) => TypeStat(typeName: e.key, count: e.value))
-          .toList(),
+      period: map.values.toList(),
       totalOrders: totalOrders,
       totalRevenue: totalRevenue,
-      todayOrders: todayOrders,
-      todayRevenue: todayRevenue,
+      periodOrders: periodOrders,
+      periodRevenue: periodRevenue,
+      periodLabel: periodLabel,
     );
   }
 }
