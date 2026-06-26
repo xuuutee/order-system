@@ -30,8 +30,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
   Future<void> signIn(String email, String password) async {
     state = const AsyncValue.loading();
     try {
-      await _supabase.auth.signInWithPassword(email: email, password: password);
-      // state is updated by onAuthStateChange listener
+      final res = await _supabase.auth.signInWithPassword(email: email, password: password);
+      if (res.user != null) state = AsyncValue.data(res.user);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;

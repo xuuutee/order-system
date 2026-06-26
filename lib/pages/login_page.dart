@@ -31,19 +31,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 
   Future<void> _tryAutoLogin() async {
-    final auth = ref.read(authProvider.notifier);
-    final user = auth.currentUser;
-    if (user == null) {
+    try {
+      final auth = ref.read(authProvider.notifier);
+      final user = auth.currentUser;
+      if (user == null) { if (mounted) setState(() => _loading = false); return; }
+      final isMember = await auth.isTeamMember(user.id);
+      if (!mounted) return;
+      if (isMember) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        await auth.signOut();
+        if (mounted) setState(() => _loading = false);
+      }
+    } catch (_) {
       if (mounted) setState(() => _loading = false);
-      return;
-    }
-    final isMember = await auth.isTeamMember(user.id);
-    if (!mounted) return;
-    if (isMember) {
-      Navigator.pushReplacementNamed(context, '/home');
-    } else {
-      await auth.signOut();
-      setState(() => _loading = false);
     }
   }
 

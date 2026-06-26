@@ -107,7 +107,7 @@ class StatsService {
       if (period == StatsPeriod.year) {
         key = '${dt.month}';
       } else {
-        key = createdAt.substring(0, 10);
+        key = dt.toIso8601String().substring(0, 10);
       }
 
       if (map.containsKey(key)) {

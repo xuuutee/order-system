@@ -82,11 +82,11 @@ class _MemberManagementPageState extends ConsumerState<MemberManagementPage> {
         content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: '姓名', border: OutlineInputBorder()), autofocus: true),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(onPressed: () {
+          FilledButton(onPressed: () async {
             final name = ctrl.text.trim();
             if (name.isEmpty) return;
-            ref.read(membersProvider.notifier).addMember(name);
-            Navigator.pop(ctx);
+            await ref.read(membersProvider.notifier).addMember(name);
+            if (ctx.mounted) Navigator.pop(ctx);
           }, child: const Text('添加')),
         ],
       ),
@@ -102,11 +102,11 @@ class _MemberManagementPageState extends ConsumerState<MemberManagementPage> {
         content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: '姓名', border: OutlineInputBorder()), autofocus: true),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(onPressed: () {
+          FilledButton(onPressed: () async {
             final name = ctrl.text.trim();
             if (name.isEmpty) return;
-            ref.read(membersProvider.notifier).renameMember(id, name);
-            Navigator.pop(ctx);
+            await ref.read(membersProvider.notifier).renameMember(id, name);
+            if (ctx.mounted) Navigator.pop(ctx);
           }, child: const Text('确定')),
         ],
       ),
@@ -123,7 +123,7 @@ class _MemberManagementPageState extends ConsumerState<MemberManagementPage> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () { ref.read(membersProvider.notifier).removeMember(id); Navigator.pop(ctx); },
+            onPressed: () async { await ref.read(membersProvider.notifier).removeMember(id); if (ctx.mounted) Navigator.pop(ctx); },
             child: const Text('删除'),
           ),
         ],

@@ -26,26 +26,29 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   Future<void> _loadInfo() async {
-    final info = await PackageInfo.fromPlatform();
-    final auth = ref.read(authProvider.notifier);
-    final member = await auth.getCurrentMember();
-    // 加载订单类型
-    List<Map<String, dynamic>> types = [];
     try {
-      final res = await Supabase.instance.client
-          .from('order_types')
-          .select()
-          .eq('is_active', true)
-          .order('created_at');
-      types = List<Map<String, dynamic>>.from(res as List);
-    } catch (_) {}
-    if (mounted) {
-      setState(() {
-        _appVersion = 'v${info.version}+${info.buildNumber}';
-        _member = member;
-        _types = types;
-        _loading = false;
-      });
+      final info = await PackageInfo.fromPlatform();
+      final auth = ref.read(authProvider.notifier);
+      final member = await auth.getCurrentMember();
+      List<Map<String, dynamic>> types = [];
+      try {
+        final res = await Supabase.instance.client
+            .from('order_types')
+            .select()
+            .eq('is_active', true)
+            .order('created_at');
+        types = List<Map<String, dynamic>>.from(res as List);
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _appVersion = 'v${info.version}+${info.buildNumber}';
+          _member = member;
+          _types = types;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -191,7 +194,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('账号信息', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
-                _InfoRow(label: '账号', value: 'gongzuoshi888@gmail.com'),
+                _InfoRow(label: '账号', value: Supabase.instance.client.auth.currentUser?.email ?? '--'),
                 const SizedBox(height: 4),
                 _InfoRow(label: '密码', value: '••••••••'),
                 const SizedBox(height: 8),
@@ -302,7 +305,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               setDialogState(() => saving = true);
               try {
                 // 先验证旧密码
-                await ref.read(authProvider.notifier).signIn('gongzuoshi888@gmail.com', oldCtrl.text);
+                final email = Supabase.instance.client.auth.currentUser?.email ?? '';
+                await ref.read(authProvider.notifier).signIn(email, oldCtrl.text);
                 await ref.read(authProvider.notifier).changePassword(newCtrl.text);
                 Navigator.pop(ctx, true);
               } catch (e) {
