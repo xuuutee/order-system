@@ -21,7 +21,7 @@ class JPushService {
   String? get registrationId => _registrationId;
 
   /// 用真实 AppKey 替换此占位符
-  static const String appKey = 'JPUSH_APP_KEY_PLACEHOLDER';
+  static const String appKey = '82b70342929c19c47ce4dd03';
 
   Future<void> init() async {
     if (_initialized) return;

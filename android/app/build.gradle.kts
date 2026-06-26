@@ -26,7 +26,7 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         manifestPlaceholders += mapOf(
-            "JPUSH_APPKEY" to "JPUSH_APP_KEY_PLACEHOLDER",
+            "JPUSH_APPKEY" to "82b70342929c19c47ce4dd03",
             "JPUSH_CHANNEL" to "developer-default"
         )
     }
