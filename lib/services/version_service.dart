@@ -35,13 +35,15 @@ class VersionService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final latest = data['version'] as String? ?? '';
+        final latestRaw = data['version'] as String? ?? '';
+        // 去掉服务器版本号可能带的 'v' 前缀，与本地格式对齐
+        final latest = latestRaw.startsWith('v') ? latestRaw.substring(1) : latestRaw;
         final downloadUrl = '$_serverUrl/update/app-release.apk';
 
         if (latest.isNotEmpty && latest != current) {
           return VersionInfo(
             currentVersion: current,
-            latestVersion: latest,
+            latestVersion: latestRaw,
             downloadUrl: downloadUrl,
             hasUpdate: true,
           );
