@@ -8,7 +8,6 @@ import 'package:order_system/pages/login_page.dart';
 import 'package:order_system/pages/home_page.dart';
 import 'package:order_system/pages/orders/order_detail_page.dart';
 import 'package:order_system/pages/orders/order_form_page.dart';
-import 'package:order_system/pages/settings/member_management_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,13 +46,11 @@ class OrderSystemApp extends StatelessWidget {
           case '/home':
             return MaterialPageRoute(builder: (_) => const HomePage());
           case '/order-detail':
-            final orderId = settings.arguments as String;
+            final orderId = settings.arguments as String? ?? '';
             return MaterialPageRoute(builder: (_) => OrderDetailPage(orderId: orderId));
           case '/order-form':
             final editOrderId = settings.arguments as String?;
             return MaterialPageRoute(builder: (_) => OrderFormPage(editOrderId: editOrderId));
-          case '/member-management':
-            return MaterialPageRoute(builder: (_) => const MemberManagementPage());
           default:
             return MaterialPageRoute(builder: (_) => const LoginPage());
         }

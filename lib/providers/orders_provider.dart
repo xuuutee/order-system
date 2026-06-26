@@ -82,32 +82,36 @@ class OrdersNotifier extends StateNotifier<AsyncValue<List<Order>>> {
   }
 
   Future<void> createOrder(Map<String, dynamic> data) async {
-    try {
-      await http.post(
-        Uri.parse('$_url/rest/v1/orders'),
-        headers: {
-          'apikey': _anonKey,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation',
-        },
-        body: jsonEncode(data),
-      );
+    final response = await http.post(
+      Uri.parse('$_url/rest/v1/orders'),
+      headers: {
+        'apikey': _anonKey,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: jsonEncode(data),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
       await loadOrders(refresh: true);
-    } catch (_) {}
+    } else {
+      throw Exception('创建订单失败 (${response.statusCode})');
+    }
   }
 
   Future<void> updateOrder(String orderId, Map<String, dynamic> data) async {
-    try {
-      await http.patch(
-        Uri.parse('$_url/rest/v1/orders?id=eq.$orderId'),
-        headers: {
-          'apikey': _anonKey,
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(data),
-      );
+    final response = await http.patch(
+      Uri.parse('$_url/rest/v1/orders?id=eq.$orderId'),
+      headers: {
+        'apikey': _anonKey,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data),
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
       await loadOrders(refresh: true);
-    } catch (_) {}
+    } else {
+      throw Exception('更新订单失败 (${response.statusCode})');
+    }
   }
 
   Future<void> changeStatus({
@@ -116,20 +120,23 @@ class OrdersNotifier extends StateNotifier<AsyncValue<List<Order>>> {
     required String toStatus,
     String? note,
   }) async {
+    // 更新订单状态
+    final response = await http.patch(
+      Uri.parse('$_url/rest/v1/orders?id=eq.$orderId'),
+      headers: {
+        'apikey': _anonKey,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'status': toStatus,
+        'updated_at': DateTime.now().toIso8601String(),
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('状态更新失败 (${response.statusCode})');
+    }
+    // 写状态日志（非关键，失败不阻断）
     try {
-      // 更新订单状态
-      await http.patch(
-        Uri.parse('$_url/rest/v1/orders?id=eq.$orderId'),
-        headers: {
-          'apikey': _anonKey,
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'status': toStatus,
-          'updated_at': DateTime.now().toIso8601String(),
-        }),
-      );
-      // 写状态日志
       await http.post(
         Uri.parse('$_url/rest/v1/order_status_logs'),
         headers: {
@@ -143,17 +150,19 @@ class OrdersNotifier extends StateNotifier<AsyncValue<List<Order>>> {
           'note': note,
         }),
       );
-      await loadOrders(refresh: true);
     } catch (_) {}
+    await loadOrders(refresh: true);
   }
 
   Future<void> deleteOrder(String orderId) async {
-    try {
-      await http.delete(
-        Uri.parse('$_url/rest/v1/orders?id=eq.$orderId'),
-        headers: {'apikey': _anonKey},
-      );
+    final response = await http.delete(
+      Uri.parse('$_url/rest/v1/orders?id=eq.$orderId'),
+      headers: {'apikey': _anonKey},
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) {
       await loadOrders(refresh: true);
-    } catch (_) {}
+    } else {
+      throw Exception('删除订单失败 (${response.statusCode})');
+    }
   }
 }

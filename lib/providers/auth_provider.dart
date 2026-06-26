@@ -179,4 +179,42 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       return [];
     }
   }
+
+  /// 获取当前登录用户的团队信息
+  Future<TeamMember?> getCurrentMember() async {
+    try {
+      final uid = _userId ?? _supabase.auth.currentUser?.id;
+      if (uid == null) return null;
+      final response = await http.get(
+        Uri.parse('$_url/rest/v1/team_members?auth_id=eq.$uid&select=*'),
+        headers: {'apikey': _anonKey},
+      );
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List;
+        if (list.isNotEmpty) return TeamMember.fromJson(list[0]);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 更新当前用户的名字和电话
+  Future<void> updateCurrentMember({
+    required String name,
+    String? phone,
+  }) async {
+    final uid = _userId ?? _supabase.auth.currentUser?.id;
+    if (uid == null) throw Exception('未登录');
+    final body = <String, dynamic>{'name': name};
+    if (phone != null) body['phone'] = phone;
+    await http.patch(
+      Uri.parse('$_url/rest/v1/team_members?auth_id=eq.$uid'),
+      headers: {
+        'apikey': _anonKey,
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+  }
 }
