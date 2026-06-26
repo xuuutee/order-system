@@ -1,21 +1,29 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
 
 class NotificationService {
   NotificationService._();
   static final NotificationService _instance = NotificationService._();
   factory NotificationService() => _instance;
 
+  static const _url = 'http://123.207.255.76:8000';
+  static const _anonKey =
+      'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIn0.tiSYBtsxALGOt22WxGEVpvzHN3lW6Sgs7AopMpeAfA0';
+
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
-  RealtimeChannel? _orderChannel;
+  Timer? _timer;
   bool _initialized = false;
+  bool _running = false;
 
-  /// 是否已初始化
+  /// 记录已通知过的最大 created_at，只推送真正的新订单
+  String? _lastCreatedAt;
+
   bool get initialized => _initialized;
 
-  /// 初始化本地通知插件
   Future<void> init() async {
     if (_initialized) return;
 
@@ -40,61 +48,88 @@ class NotificationService {
     debugPrint('NotificationService initialized');
   }
 
-  /// 开始监听新订单（Supabase Realtime）
-  Future<void> startListening() async {
-    if (!_initialized) {
-      debugPrint('NotificationService not initialized, cannot start listening');
-      return;
-    }
+  /// 开始轮询新订单（每 30 秒），替代 Realtime websocket
+  void startListening() {
+    if (!_initialized) return;
+    if (_running) return;
+    _running = true;
 
-    // 确保先取消旧订阅
-    await stopListening();
+    // 先查一次最新订单时间作为基准，避免把现存老订单当新订单推
+    _fetchLatestCreatedAt().then((_) {
+      if (_running) {
+        _timer = Timer.periodic(const Duration(seconds: 30), (_) => _poll());
+      }
+    });
+    debugPrint('NotificationService polling started');
+  }
 
+  void stopListening() {
+    _running = false;
+    _timer?.cancel();
+    _timer = null;
+    debugPrint('NotificationService polling stopped');
+  }
+
+  /// 获取当前最新订单的 created_at 作为基准线
+  Future<void> _fetchLatestCreatedAt() async {
     try {
-      _orderChannel = Supabase.instance.client
-          .channel('orders-notifications')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'orders',
-            callback: _onNewOrder,
-          )
-          .subscribe((status, _) {
-        debugPrint('Realtime subscription status: $status');
-      });
-      debugPrint('NotificationService started listening for new orders');
+      final response = await http.get(
+        Uri.parse(
+            '$_url/rest/v1/orders?select=created_at&order=created_at.desc&limit=1'),
+        headers: {'apikey': _anonKey},
+      );
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List;
+        if (list.isNotEmpty) {
+          _lastCreatedAt = list[0]['created_at'] as String?;
+        }
+      }
     } catch (e) {
-      debugPrint('Failed to subscribe: $e');
+      debugPrint('_fetchLatestCreatedAt error: $e');
     }
   }
 
-  /// 停止监听
-  Future<void> stopListening() async {
-    if (_orderChannel != null) {
-      await _orderChannel!.unsubscribe();
-      _orderChannel = null;
-      debugPrint('NotificationService stopped listening');
+  /// 轮询：查询比 _lastCreatedAt 更新的订单
+  Future<void> _poll() async {
+    try {
+      if (_lastCreatedAt == null) {
+        await _fetchLatestCreatedAt();
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse(
+            '$_url/rest/v1/orders?select=order_no,title,customer_name,created_at&created_at=gt.${Uri.encodeComponent(_lastCreatedAt!)}&order=created_at.asc'),
+        headers: {'apikey': _anonKey},
+      );
+
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body) as List;
+        for (final row in list) {
+          final orderNo = row['order_no'] as String? ?? '';
+          final title = row['title'] as String? ?? '无标题';
+          final customerName = row['customer_name'] as String? ?? '无客户名';
+          final createdAt = row['created_at'] as String?;
+
+          _showNotification(orderNo, title, customerName);
+
+          // 推进基准线
+          if (createdAt != null) {
+            _lastCreatedAt = createdAt;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('NotificationService poll error: $e');
     }
   }
 
-  /// Realtime 回调：新订单 INSERT
-  void _onNewOrder(PostgresChangePayload payload) {
-    final record = payload.newRecord;
-
-    final orderNo = record['order_no'] as String? ?? '';
-    final title = record['title'] as String? ?? '无标题';
-    final customerName = record['customer_name'] as String? ?? '无客户名';
-
-    _showNotification(orderNo, title, customerName);
-  }
-
-  /// 弹出本地通知
   Future<void> _showNotification(
       String orderNo, String title, String customerName) async {
     await _plugin.show(
-      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      DateTime.now().millisecondsSinceEpoch ~/ 1000 + orderNo.hashCode,
       '新订单通知',
-      '「$title」— $customerName ($orderNo)',
+      '「$title」— $customerName',
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'new_orders',
@@ -108,9 +143,7 @@ class NotificationService {
     );
   }
 
-  /// 通知点击回调（跳转到订单列表）
   void _onNotificationTap(NotificationResponse response) {
     debugPrint('Notification tapped: ${response.payload}');
-    // 目前不做跳转，后续可按需导航到订单详情
   }
 }
