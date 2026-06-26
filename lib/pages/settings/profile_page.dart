@@ -184,6 +184,42 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           ),
           const SizedBox(height: 24),
 
+          // ── 账号信息 ──
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('账号信息', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                _InfoRow(label: '账号', value: 'gongzuoshi888@gmail.com'),
+                const SizedBox(height: 4),
+                _InfoRow(label: '密码', value: '••••••••'),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: _changePassword,
+                    icon: const Icon(Icons.lock_outline, size: 16),
+                    label: const Text('修改密码', style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 负责人管理 ──
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.group),
+              title: const Text('负责人管理'),
+              subtitle: const Text('添加 / 删除 / 改名'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.pushNamed(context, '/member-management'),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // ── 订单类型 ──
           Card(
             child: Padding(
@@ -244,6 +280,43 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     );
   }
 
+  Future<void> _changePassword() async {
+    final oldCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('修改密码'),
+          content: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextFormField(controller: oldCtrl, obscureText: true, decoration: const InputDecoration(labelText: '旧密码', border: OutlineInputBorder()), validator: (v) => v == null || v.isEmpty ? '请输入旧密码' : null),
+            const SizedBox(height: 12),
+            TextFormField(controller: newCtrl, obscureText: true, decoration: const InputDecoration(labelText: '新密码', border: OutlineInputBorder()), validator: (v) => v == null || v.length < 6 ? '至少6位' : null),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            FilledButton(onPressed: saving ? null : () async {
+              if (!formKey.currentState!.validate()) return;
+              setDialogState(() => saving = true);
+              try {
+                // 先验证旧密码
+                await ref.read(authProvider.notifier).signIn('gongzuoshi888@gmail.com', oldCtrl.text);
+                await ref.read(authProvider.notifier).changePassword(newCtrl.text);
+                Navigator.pop(ctx, true);
+              } catch (e) {
+                setDialogState(() => saving = false);
+                if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('修改失败：${e.toString().contains("Invalid") ? "旧密码错误" : e}')));
+              }
+            }, child: Text(saving ? '修改中...' : '确认修改')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('密码已修改')));
+  }
+
   IconData _iconForType(String? icon) {
     switch (icon) {
       case 'school': return Icons.school;
@@ -253,5 +326,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       case 'description': return Icons.description;
       default: return Icons.receipt_long;
     }
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String label, value;
+  const _InfoRow({required this.label, required this.value});
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Text('$label：', style: const TextStyle(fontSize: 14, color: Colors.grey)),
+      Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+    ]);
   }
 }

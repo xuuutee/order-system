@@ -98,4 +98,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
         .update(body)
         .eq('auth_id', uid);
   }
+
+  /// 修改当前登录用户的密码
+  Future<void> changePassword(String newPassword) async {
+    await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+  }
 }
